@@ -1,0 +1,126 @@
+# Checks every repo runs, whatever its stack: a Gitleaks scan of the full git history and, for npm
+# projects, a lockfile install, an advisory audit and a registry signature check. Pull requests on
+# public repos also get dependency review.
+#
+# Call it from a repo's own workflow:
+#
+#   jobs:
+#     baseline:
+#       uses: jmusick/ci/.github/workflows/baseline.yml@<commit sha> # vX.Y.Z
+name: Baseline
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node version for the npm checks. Ignored when node-version-file is set.
+        type: string
+        default: '24'
+      node-version-file:
+        description: File to read the Node version from, such as .nvmrc or .node-version.
+        type: string
+        default: ''
+      audit-level:
+        description: Lowest npm audit severity that fails the job (low, moderate, high or critical).
+        type: string
+        default: high
+
+permissions:
+  contents: read
+
+env:
+  # To upgrade: pick a release at least two weeks old and copy the linux_x64 SHA-256 from that
+  # release's gitleaks_<version>_checksums.txt.
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  NPM_CONFIG_FUND: 'false'
+  NPM_CONFIG_UPDATE_NOTIFIER: 'false'
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Gitleaks
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/gitleaks" gitleaks
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
+
+      # Gitleaks picks up the repo's own .gitleaks.toml and .gitleaksignore when they exist.
+      - name: Scan history
+        run: gitleaks git --redact --no-banner --verbose --exit-code 1 .
+
+  dependencies:
+    name: Dependency checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Look for package-lock.json
+        id: npm
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No package-lock.json, so the npm checks are skipped."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node
+        if: steps.npm.outputs.found == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
+          node-version-file: ${{ inputs.node-version-file }}
+          package-manager-cache: false
+
+      # npm ci fails when package-lock.json is out of sync with package.json.
+      - name: Install from the lockfile without scripts
+        if: steps.npm.outputs.found == 'true'
+        run: npm ci --ignore-scripts --no-audit
+
+      - name: Advisory audit
+        if: steps.npm.outputs.found == 'true'
+        env:
+          AUDIT_LEVEL: ${{ inputs.audit-level }}
+        run: npm audit --audit-level="$AUDIT_LEVEL"
+
+      - name: Registry signatures
+        if: steps.npm.outputs.found == 'true'
+        run: npm audit signatures
+
+  dependency-review:
+    name: Dependency review
+    # Dependency review on a private repo needs GitHub Code Security, which personal accounts don't have.
+    if: github.event_name == 'pull_request' && !github.event.repository.private
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          fail-on-scopes: runtime
+          license-check: false
+          comment-summary-in-pr: never

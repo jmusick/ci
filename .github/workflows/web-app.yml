@@ -1,0 +1,186 @@
+# Lint, type check, test and build for the Cloudflare web apps (Astro or Vite), plus an optional
+# accessibility audit against a local server. Each check runs only when its command is set, so a repo
+# turns on exactly the checks it has scripts for.
+#
+# Call it from a repo's own workflow:
+#
+#   jobs:
+#     web-app:
+#       uses: jmusick/ci/.github/workflows/web-app.yml@<commit sha> # vX.Y.Z
+#       with:
+#         typecheck-command: npm run check
+#         test-command: npm test
+#
+# The command inputs come from the calling repo's workflow file, not from event data, so they are
+# run as written.
+name: Web app
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node version. Ignored when node-version-file is set.
+        type: string
+        default: '24'
+      node-version-file:
+        description: File to read the Node version from, such as .nvmrc or .node-version.
+        type: string
+        default: ''
+      setup-command:
+        description: Runs after npm ci and before every check, for example npm run cf:types.
+        type: string
+        default: ''
+      lint-command:
+        description: Lint command. Empty skips linting.
+        type: string
+        default: ''
+      typecheck-command:
+        description: Type check command, for example npm run check. Empty skips it.
+        type: string
+        default: ''
+      test-command:
+        description: Test command. Empty skips tests.
+        type: string
+        default: ''
+      build-command:
+        description: Production build command. Empty skips the build.
+        type: string
+        default: npm run build
+      a11y-command:
+        description: Accessibility audit command. Empty skips the whole accessibility job.
+        type: string
+        default: ''
+      a11y-setup-command:
+        description: Runs after the build and before the server starts, for example writing .dev.vars and a local database.
+        type: string
+        default: ''
+      a11y-server-command:
+        description: Starts the local server in the background. Empty means a11y-command starts its own.
+        type: string
+        default: ''
+      a11y-url:
+        description: Base URL of the local server, passed to a11y-command as A11Y_BASE_URL.
+        type: string
+        default: http://127.0.0.1:4399
+      a11y-ready-url:
+        description: URL polled until the server answers. Defaults to a11y-url.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  ASTRO_TELEMETRY_DISABLED: '1'
+  WRANGLER_SEND_METRICS: 'false'
+  NPM_CONFIG_AUDIT: 'false'
+  NPM_CONFIG_FUND: 'false'
+  NPM_CONFIG_UPDATE_NOTIFIER: 'false'
+
+jobs:
+  checks:
+    name: Lint, type check, test and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: npm
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Setup
+        if: inputs.setup-command != ''
+        run: ${{ inputs.setup-command }}
+
+      - name: Lint
+        if: inputs.lint-command != ''
+        run: ${{ inputs.lint-command }}
+
+      - name: Type check
+        if: inputs.typecheck-command != ''
+        run: ${{ inputs.typecheck-command }}
+
+      - name: Test
+        if: inputs.test-command != ''
+        run: ${{ inputs.test-command }}
+
+      - name: Build
+        if: inputs.build-command != ''
+        run: ${{ inputs.build-command }}
+
+  a11y:
+    name: Accessibility audit
+    if: inputs.a11y-command != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      A11Y_BASE_URL: ${{ inputs.a11y-url }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: npm
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Install Chromium
+        run: |
+          if [ -x node_modules/.bin/playwright ]; then
+            npx --no-install playwright install --with-deps --no-shell chromium
+          elif [ -x node_modules/.bin/playwright-core ]; then
+            npx --no-install playwright-core install --with-deps --no-shell chromium
+          else
+            echo "::error::The accessibility audit needs playwright or playwright-core in devDependencies."
+            exit 1
+          fi
+
+      - name: Setup
+        if: inputs.setup-command != ''
+        run: ${{ inputs.setup-command }}
+
+      - name: Build
+        if: inputs.build-command != ''
+        run: ${{ inputs.build-command }}
+
+      - name: Prepare the local server
+        if: inputs.a11y-setup-command != ''
+        run: ${{ inputs.a11y-setup-command }}
+
+      - name: Start the local server
+        if: inputs.a11y-server-command != ''
+        env:
+          SERVER_COMMAND: ${{ inputs.a11y-server-command }}
+          READY_URL: ${{ inputs.a11y-ready-url || inputs.a11y-url }}
+        run: |
+          nohup bash -c "$SERVER_COMMAND" > "$RUNNER_TEMP/server.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -fsS -o /dev/null "$READY_URL"; then exit 0; fi
+            sleep 2
+          done
+          echo "::error::The server did not answer $READY_URL within 120 seconds."
+          exit 1
+
+      - name: Accessibility audit
+        run: ${{ inputs.a11y-command }}
+
+      - name: Server log
+        if: failure() && inputs.a11y-server-command != ''
+        run: cat "$RUNNER_TEMP/server.log" || true

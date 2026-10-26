@@ -1,0 +1,44 @@
+# Copy to .github/workflows/ci.yml in a web app repo. Then:
+#   - change the branch below if the repo's default branch is master
+#   - replace both @main pins with @<commit sha> # vX.Y.Z for the jmusick/ci release you want
+#     (gh api repos/jmusick/ci/commits/vX.Y.Z --jq .sha). Keep the "# vX.Y.Z" comment so
+#     Dependabot can propose newer releases
+#   - set only the commands the repo has scripts for, and delete the rest
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  baseline:
+    name: Baseline
+    uses: jmusick/ci/.github/workflows/baseline.yml@main
+    with:
+      node-version-file: .nvmrc
+
+  web-app:
+    name: Web app
+    uses: jmusick/ci/.github/workflows/web-app.yml@main
+    with:
+      node-version-file: .nvmrc
+      setup-command: npm run cf:types
+      lint-command: npm run lint
+      typecheck-command: npm run check
+      test-command: npm test
+      build-command: npm run build
+      # Example accessibility audit against a local server. Adjust to the repo, or delete to skip it.
+      a11y-command: npm run test:a11y
+      a11y-setup-command: |
+        printf 'AUTH_SECRET=%s\n' "$(openssl rand -hex 32)" > .dev.vars
+        npx wrangler d1 migrations apply DB --local
+      a11y-server-command: npx astro dev --host 127.0.0.1 --port 4399
+      a11y-url: http://127.0.0.1:4399

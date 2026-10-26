@@ -1,0 +1,17 @@
+# Keeps the SHA-pinned actions in the shared workflows current. Gitleaks and actionlint are pinned by
+# version and checksum in the workflow files and are updated by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 3
+    labels: [dependencies]
+    cooldown:
+      default-days: 14
+    groups:
+      actions:
+        patterns: ["*"]
