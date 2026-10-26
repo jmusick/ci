@@ -1,0 +1,15 @@
+# Publishes this repo's own GitHub Release for each vX.Y.Z tag, through the shared release workflow.
+name: Publish
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml

@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.0] - 2026-10-26
+
+### Added
+
+- Lockfile integrity check in the baseline, adapted from orboro-net: lockfile format 3, registry-only
+  HTTPS sources, sha512 hashes, and reviewed install scripts through package.json `allowScripts`.
+- npm version floor in the baseline and both web-app jobs. Defaults to 11.19.0 when `.npmrc` sets
+  `min-release-age` or `strict-allow-scripts`; the `npm-min-version` input sets one explicitly.
+- `after-build-command` input on web-app, for checks on the built output.
+- `release.yml`: publishes a GitHub Release for a pushed version tag with generated notes, attaching files
+  from an artifact. This repo now publishes its own releases with it.
+- A CI gate job in the web-app template and a new release template.
+- Script tests and a sample project in the Self-check workflow.
+
 ## [0.1.0] - 2026-10-26
 
 ### Added

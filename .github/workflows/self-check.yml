@@ -1,4 +1,5 @@
-# Checks this repo: actionlint on every workflow here, and the shared baseline run against this repo.
+# Checks this repo: actionlint on every workflow here, the script tests, and the shared baseline run
+# against this repo.
 name: Self-check
 
 on:
@@ -42,6 +43,30 @@ jobs:
 
       - name: Lint workflows and templates
         run: actionlint -color .github/workflows/*.yml templates/*-ci.yml
+
+  scripts:
+    name: Script tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Unit tests
+        run: node --test "tests/*.test.mjs"
+
+      - name: Run both checks on the sample project
+        run: |
+          node scripts/check-npm-version.mjs tests/fixtures/sample-project
+          node scripts/check-lockfile.mjs tests/fixtures/sample-project
 
   baseline:
     uses: ./.github/workflows/baseline.yml

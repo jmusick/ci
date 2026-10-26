@@ -1,0 +1,47 @@
+# Copy to .github/workflows/release.yml. It publishes a GitHub Release whenever a vX.Y.Z tag is
+# pushed, for example by /patch or /minor. Then:
+#   - replace the build job's steps with the repo's own build, or delete the build job, needs: build and
+#     the with: block if the release only needs notes
+#   - replace @main with @<commit sha> # vX.Y.Z for the jmusick/ci release you want
+#     (gh api repos/jmusick/ci/commits/vX.Y.Z --jq .sha)
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build
+        run: |
+          mkdir -p dist
+          zip -r "dist/${GITHUB_REPOSITORY#*/}-${GITHUB_REF_NAME}.zip" . -x '.git/*' 'dist/*'
+
+      - name: Upload release files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Release
+    needs: build
+    permissions:
+      contents: write
+    uses: jmusick/ci/.github/workflows/release.yml@main
+    with:
+      artifact-name: release-files
