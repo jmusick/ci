@@ -35,6 +35,7 @@ jobs:
       typecheck-command: npm run check
       test-command: npm test
       build-command: npm run build
+      after-build-command: npm run check:dist
       # Example accessibility audit against a local server. Adjust to the repo, or delete to skip it.
       a11y-command: npm run test:a11y
       a11y-setup-command: |
@@ -42,3 +43,24 @@ jobs:
         npx wrangler d1 migrations apply DB --local
       a11y-server-command: npx astro dev --host 127.0.0.1 --port 4399
       a11y-url: http://127.0.0.1:4399
+
+  # The one check to require in branch protection. It passes only when every job above passed, so
+  # adding a job never means updating the protection rule.
+  gate:
+    name: CI gate
+    if: always()
+    needs: [baseline, web-app]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to have passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "::error::A required job did not succeed."
+              exit 1
+            fi
+          done

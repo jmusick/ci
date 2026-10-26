@@ -1,0 +1,94 @@
+# Publishes a GitHub Release for the pushed vX.Y.Z tag, with notes generated from the merged pull
+# requests. A tag with a hyphen, such as v1.2.0-beta.1, becomes a prerelease. Uses the gh CLI that is
+# already on the runner, so no third-party action handles the token.
+#
+# To attach build output, build it in a job of the calling workflow, upload it with
+# actions/upload-artifact, and pass that artifact's name. If the release already exists, for example
+# when a job is re-run, the files are uploaded to it again and replace the old ones.
+#
+# Call it from a workflow that runs on tag pushes, and give the calling job contents: write:
+#
+#   jobs:
+#     release:
+#       permissions:
+#         contents: write
+#       uses: jmusick/ci/.github/workflows/release.yml@<commit sha> # vX.Y.Z
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        description: Name of an artifact uploaded earlier in the calling workflow whose files go on the release. Empty attaches nothing.
+        type: string
+        default: ''
+      files:
+        description: Space-separated glob patterns, relative to the artifact, choosing which of its files to attach.
+        type: string
+        default: '*'
+      title:
+        description: Release title. Defaults to the tag name.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Require a version tag
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [[ "$REF" != refs/tags/v* ]]; then
+            echo "::error::The release workflow runs only on a pushed vX.Y.Z tag, not $REF."
+            exit 1
+          fi
+
+      - name: Download release files
+        if: inputs.artifact-name != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ runner.temp }}/release-files
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          TITLE: ${{ inputs.title }}
+          ARTIFACT_NAME: ${{ inputs.artifact-name }}
+          FILES: ${{ inputs.files }}
+        run: |
+          files=()
+          if [ -n "$ARTIFACT_NAME" ]; then
+            cd "$RUNNER_TEMP/release-files"
+            shopt -s nullglob globstar
+            # Unquoted on purpose: each pattern in FILES is split on spaces and expanded as a glob.
+            # shellcheck disable=SC2086
+            for file in $FILES; do
+              if [ -f "$file" ]; then files+=("$RUNNER_TEMP/release-files/$file"); fi
+            done
+            if [ ${#files[@]} -eq 0 ]; then
+              echo "::error::No files in the $ARTIFACT_NAME artifact match: $FILES"
+              exit 1
+            fi
+            printf 'Attaching %s\n' "${files[@]##*/}"
+          fi
+
+          if gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
+            echo "Release $TAG already exists."
+            if [ ${#files[@]} -gt 0 ]; then gh release upload "$TAG" "${files[@]}" --repo "$REPO" --clobber; fi
+            exit 0
+          fi
+
+          args=(--repo "$REPO" --verify-tag --generate-notes --title "${TITLE:-$TAG}")
+          if [[ "$TAG" == *-* ]]; then args+=(--prerelease); fi
+          gh release create "$TAG" "${files[@]}" "${args[@]}"

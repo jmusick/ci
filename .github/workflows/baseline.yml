@@ -1,6 +1,6 @@
 # Checks every repo runs, whatever its stack: a Gitleaks scan of the full git history and, for npm
-# projects, a lockfile install, an advisory audit and a registry signature check. Pull requests on
-# public repos also get dependency review.
+# projects, an npm version floor, a lockfile integrity check, a lockfile install, an advisory audit and
+# a registry signature check. Pull requests on public repos also get dependency review.
 #
 # Call it from a repo's own workflow:
 #
@@ -24,6 +24,10 @@ on:
         description: Lowest npm audit severity that fails the job (low, moderate, high or critical).
         type: string
         default: high
+      npm-min-version:
+        description: Oldest npm allowed. Empty means 11.19.0 when .npmrc sets min-release-age or strict-allow-scripts, and no minimum otherwise.
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -89,6 +93,42 @@ jobs:
           node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
           node-version-file: ${{ inputs.node-version-file }}
           package-manager-cache: false
+
+      # The scripts come from this workflow's own repo and commit, so they match the caller's pin.
+      - name: Check out the shared scripts
+        if: steps.npm.outputs.found == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .shared-ci
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Move the shared scripts out of the workspace
+        if: steps.npm.outputs.found == 'true'
+        env:
+          SHARED_REPO: ${{ job.workflow_repository }}
+          SHARED_SHA: ${{ job.workflow_sha }}
+        run: |
+          # Empty values would have checked out the calling repo instead, so stop rather than run its files.
+          if [ -z "$SHARED_REPO" ] || [ -z "$SHARED_SHA" ]; then
+            echo "::error::job.workflow_repository or job.workflow_sha is empty, so the shared scripts can't be located."
+            exit 1
+          fi
+          echo "Shared scripts from $SHARED_REPO@$SHARED_SHA"
+          mv .shared-ci/scripts "$RUNNER_TEMP/shared-ci"
+          rm -rf .shared-ci
+
+      - name: npm version floor
+        if: steps.npm.outputs.found == 'true'
+        env:
+          NPM_MIN_VERSION: ${{ inputs.npm-min-version }}
+        run: node "$RUNNER_TEMP/shared-ci/check-npm-version.mjs" --min "$NPM_MIN_VERSION"
+
+      - name: Lockfile integrity
+        if: steps.npm.outputs.found == 'true'
+        run: node "$RUNNER_TEMP/shared-ci/check-lockfile.mjs"
 
       # npm ci fails when package-lock.json is out of sync with package.json.
       - name: Install from the lockfile without scripts

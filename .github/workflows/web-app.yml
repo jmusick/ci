@@ -1,5 +1,6 @@
-# Lint, type check, test and build for the Cloudflare web apps (Astro or Vite), plus an optional
-# accessibility audit against a local server. Each check runs only when its command is set, so a repo
+# Lint, type check, test, build and post-build checks for the Cloudflare web apps (Astro or Vite), plus
+# an optional accessibility audit against a local server. Both jobs enforce the same npm version floor
+# as the baseline before installing. Each check runs only when its command is set, so a repo
 # turns on exactly the checks it has scripts for.
 #
 # Call it from a repo's own workflow:
@@ -46,6 +47,14 @@ on:
         description: Production build command. Empty skips the build.
         type: string
         default: npm run build
+      after-build-command:
+        description: Runs after the build, for checks on the built output. Empty skips it.
+        type: string
+        default: ''
+      npm-min-version:
+        description: Oldest npm allowed. Empty means 11.19.0 when .npmrc sets min-release-age or strict-allow-scripts, and no minimum otherwise.
+        type: string
+        default: ''
       a11y-command:
         description: Accessibility audit command. Empty skips the whole accessibility job.
         type: string
@@ -95,6 +104,35 @@ jobs:
           node-version-file: ${{ inputs.node-version-file }}
           cache: npm
 
+      # The scripts come from this workflow's own repo and commit, so they match the caller's pin.
+      - name: Check out the shared scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .shared-ci
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Move the shared scripts out of the workspace
+        env:
+          SHARED_REPO: ${{ job.workflow_repository }}
+          SHARED_SHA: ${{ job.workflow_sha }}
+        run: |
+          # Empty values would have checked out the calling repo instead, so stop rather than run its files.
+          if [ -z "$SHARED_REPO" ] || [ -z "$SHARED_SHA" ]; then
+            echo "::error::job.workflow_repository or job.workflow_sha is empty, so the shared scripts can't be located."
+            exit 1
+          fi
+          echo "Shared scripts from $SHARED_REPO@$SHARED_SHA"
+          mv .shared-ci/scripts "$RUNNER_TEMP/shared-ci"
+          rm -rf .shared-ci
+
+      - name: npm version floor
+        env:
+          NPM_MIN_VERSION: ${{ inputs.npm-min-version }}
+        run: node "$RUNNER_TEMP/shared-ci/check-npm-version.mjs" --min "$NPM_MIN_VERSION"
+
       - name: Install from the lockfile
         run: npm ci
 
@@ -118,6 +156,10 @@ jobs:
         if: inputs.build-command != ''
         run: ${{ inputs.build-command }}
 
+      - name: Check the build
+        if: inputs.after-build-command != ''
+        run: ${{ inputs.after-build-command }}
+
   a11y:
     name: Accessibility audit
     if: inputs.a11y-command != ''
@@ -137,6 +179,34 @@ jobs:
           node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
           node-version-file: ${{ inputs.node-version-file }}
           cache: npm
+
+      - name: Check out the shared scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .shared-ci
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Move the shared scripts out of the workspace
+        env:
+          SHARED_REPO: ${{ job.workflow_repository }}
+          SHARED_SHA: ${{ job.workflow_sha }}
+        run: |
+          # Empty values would have checked out the calling repo instead, so stop rather than run its files.
+          if [ -z "$SHARED_REPO" ] || [ -z "$SHARED_SHA" ]; then
+            echo "::error::job.workflow_repository or job.workflow_sha is empty, so the shared scripts can't be located."
+            exit 1
+          fi
+          echo "Shared scripts from $SHARED_REPO@$SHARED_SHA"
+          mv .shared-ci/scripts "$RUNNER_TEMP/shared-ci"
+          rm -rf .shared-ci
+
+      - name: npm version floor
+        env:
+          NPM_MIN_VERSION: ${{ inputs.npm-min-version }}
+        run: node "$RUNNER_TEMP/shared-ci/check-npm-version.mjs" --min "$NPM_MIN_VERSION"
 
       - name: Install from the lockfile
         run: npm ci

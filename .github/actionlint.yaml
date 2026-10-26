@@ -1,0 +1,7 @@
+# actionlint 1.7.12 predates the job.workflow_repository and job.workflow_sha context properties, so it
+# reports them as undefined. The shared workflows check at runtime that both are set. Remove this once
+# actionlint knows them.
+paths:
+  .github/workflows/**/*.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type'
