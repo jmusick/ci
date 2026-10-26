@@ -115,7 +115,18 @@ jobs:
           persist-credentials: false
 
       - name: Move the shared scripts out of the workspace
-        run: mv .shared-ci/scripts "$RUNNER_TEMP/shared-ci" && rm -rf .shared-ci
+        env:
+          SHARED_REPO: ${{ job.workflow_repository }}
+          SHARED_SHA: ${{ job.workflow_sha }}
+        run: |
+          # Empty values would have checked out the calling repo instead, so stop rather than run its files.
+          if [ -z "$SHARED_REPO" ] || [ -z "$SHARED_SHA" ]; then
+            echo "::error::job.workflow_repository or job.workflow_sha is empty, so the shared scripts can't be located."
+            exit 1
+          fi
+          echo "Shared scripts from $SHARED_REPO@$SHARED_SHA"
+          mv .shared-ci/scripts "$RUNNER_TEMP/shared-ci"
+          rm -rf .shared-ci
 
       - name: npm version floor
         env:
@@ -179,7 +190,18 @@ jobs:
           persist-credentials: false
 
       - name: Move the shared scripts out of the workspace
-        run: mv .shared-ci/scripts "$RUNNER_TEMP/shared-ci" && rm -rf .shared-ci
+        env:
+          SHARED_REPO: ${{ job.workflow_repository }}
+          SHARED_SHA: ${{ job.workflow_sha }}
+        run: |
+          # Empty values would have checked out the calling repo instead, so stop rather than run its files.
+          if [ -z "$SHARED_REPO" ] || [ -z "$SHARED_SHA" ]; then
+            echo "::error::job.workflow_repository or job.workflow_sha is empty, so the shared scripts can't be located."
+            exit 1
+          fi
+          echo "Shared scripts from $SHARED_REPO@$SHARED_SHA"
+          mv .shared-ci/scripts "$RUNNER_TEMP/shared-ci"
+          rm -rf .shared-ci
 
       - name: npm version floor
         env:
