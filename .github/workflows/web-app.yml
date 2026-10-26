@@ -214,9 +214,9 @@ jobs:
       - name: Install Chromium
         run: |
           if [ -x node_modules/.bin/playwright ]; then
-            npx --no-install playwright install --with-deps --no-shell chromium
+            npx --no-install playwright install --with-deps chromium
           elif [ -x node_modules/.bin/playwright-core ]; then
-            npx --no-install playwright-core install --with-deps --no-shell chromium
+            npx --no-install playwright-core install --with-deps chromium
           else
             echo "::error::The accessibility audit needs playwright or playwright-core in devDependencies."
             exit 1
