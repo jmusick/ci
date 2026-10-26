@@ -28,6 +28,10 @@ on:
         description: Oldest npm allowed. Empty means 11.19.0 when .npmrc sets min-release-age or strict-allow-scripts, and no minimum otherwise.
         type: string
         default: ''
+      ignore-gitleaks-allow:
+        description: Report findings even on lines marked with an inline gitleaks:allow comment, so exceptions can only live in .gitleaks.toml.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -64,7 +68,12 @@ jobs:
 
       # Gitleaks picks up the repo's own .gitleaks.toml and .gitleaksignore when they exist.
       - name: Scan history
-        run: gitleaks git --redact --no-banner --verbose --exit-code 1 .
+        env:
+          IGNORE_ALLOW: ${{ inputs.ignore-gitleaks-allow }}
+        run: |
+          args=(--redact --no-banner --verbose --exit-code 1)
+          if [ "$IGNORE_ALLOW" = "true" ]; then args+=(--ignore-gitleaks-allow); fi
+          gitleaks git "${args[@]}" .
 
   dependencies:
     name: Dependency checks

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1] - 2026-10-26
+
+### Added
+
+- `ignore-gitleaks-allow` input on the baseline, for repos where secret-scan exceptions may only live in
+  `.gitleaks.toml`. Found in the Firelands Current pilot.
+
+### Fixed
+
+- The accessibility job now installs Playwright's headless shell along with Chromium. Scripts that launch
+  the default headless browser, like Firelands Current's, failed because `--no-shell` skipped it.
+
 ## [0.2.0] - 2026-10-26
 
 ### Added

@@ -19,6 +19,7 @@ check changed here reaches every repo on its next pin bump.
 | `node-version-file` | | For example `.nvmrc` or `.node-version`. |
 | `audit-level` | `high` | Lowest `npm audit` severity that fails the job. |
 | `npm-min-version` | | Oldest npm allowed. See the npm version floor below. |
+| `ignore-gitleaks-allow` | `false` | Report findings even on lines with an inline `gitleaks:allow` comment, so exceptions can only live in `.gitleaks.toml`. |
 
 **npm version floor** ([`scripts/check-npm-version.mjs`](scripts/check-npm-version.mjs)). Older npm
 ignores `.npmrc` settings it doesn't know, without a warning. So when `.npmrc` sets `min-release-age` or
