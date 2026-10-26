@@ -65,7 +65,7 @@ comment. So:
 ## Docs and comments
 
 - A new or changed input updates its `description:`, the input table in README.md, and the CHANGELOG.
-- Each workflow opens with a comment saying what it does and how to call it. Comments explain why,
+- Each shared workflow opens with a comment saying what it does and how to call it. Comments explain why,
   not what the next line does.
 - Prose and comments wrap at about 105 characters.
 - CHANGELOG.md follows Keep a Changelog. Add user-facing changes under `## [Unreleased]`.
@@ -73,4 +73,5 @@ comment. So:
 ## Releases
 
 Releases are cut with `/patch` or `/minor`: one commit with the subject `vX.Y.Z - Summary`, a `vX.Y.Z`
-tag, and a push. `publish.yml` then publishes the GitHub Release. Self-check must pass first.
+tag, and a push. `publish.yml` then publishes the GitHub Release. Nothing makes the release wait for
+Self-check, so run the script tests locally before releasing.

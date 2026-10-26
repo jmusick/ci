@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.3] - 2026-10-26
+
+### Fixed
+
+- The README now says the accessibility job runs `setup-command` before the build, as the checks job does.
+- AGENTS.md no longer says a release waits for Self-check. Nothing enforces that, so it now says to run
+  the script tests locally first.
+
 ## [0.2.2] - 2026-10-26
 
 ### Added
