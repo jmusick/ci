@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.2] - 2026-10-26
+
+### Added
+
+- AGENTS.md with the conventions for changing this repo, and a CLAUDE.md that points to it.
+
+### Changed
+
+- The accessibility job installs Chromium without `--with-deps`. The runner image already has the
+  libraries it needs, and the extra fonts apt pulled in took up to 10 minutes on a slow Ubuntu mirror.
+  System packages are still installed when a browser binary is missing a library.
+- The accessibility job skips push events. The pull request already audited what the push merges, so
+  the post-merge run on the default branch no longer repeats the slowest job. Pull requests, manual
+  runs and schedules still run it.
+
 ## [0.2.1] - 2026-10-26
 
 ### Added

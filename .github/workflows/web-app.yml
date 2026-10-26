@@ -1,7 +1,7 @@
 # Lint, type check, test, build and post-build checks for the Cloudflare web apps (Astro or Vite), plus
-# an optional accessibility audit against a local server. Both jobs enforce the same npm version floor
-# as the baseline before installing. Each check runs only when its command is set, so a repo
-# turns on exactly the checks it has scripts for.
+# an optional accessibility audit against a local server, which skips push events. Both jobs enforce the
+# same npm version floor as the baseline before installing. Each check runs only when its command is set,
+# so a repo turns on exactly the checks it has scripts for.
 #
 # Call it from a repo's own workflow:
 #
@@ -162,7 +162,8 @@ jobs:
 
   a11y:
     name: Accessibility audit
-    if: inputs.a11y-command != ''
+    # Pull requests already audit what a push to the default branch merges, so pushes skip it.
+    if: inputs.a11y-command != '' && github.event_name != 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -211,15 +212,26 @@ jobs:
       - name: Install from the lockfile
         run: npm ci
 
+      # The runner image already has the libraries Chromium needs, so only the browser is downloaded.
+      # --with-deps would also apt-install extra fonts, which took up to 10 minutes on a slow mirror.
+      # System packages are installed only when a browser binary is missing a library.
       - name: Install Chromium
         run: |
           if [ -x node_modules/.bin/playwright ]; then
-            npx --no-install playwright install --with-deps chromium
+            playwright=(npx --no-install playwright)
           elif [ -x node_modules/.bin/playwright-core ]; then
-            npx --no-install playwright-core install --with-deps chromium
+            playwright=(npx --no-install playwright-core)
           else
             echo "::error::The accessibility audit needs playwright or playwright-core in devDependencies."
             exit 1
+          fi
+          "${playwright[@]}" install chromium
+          missing=$(find "$HOME/.cache/ms-playwright" -type f \( -name chrome -o -name chrome-headless-shell \) \
+            -exec ldd {} + | grep 'not found' || true)
+          if [ -n "$missing" ]; then
+            echo "Chromium is missing system libraries, so installing them:"
+            echo "$missing"
+            "${playwright[@]}" install-deps chromium
           fi
 
       - name: Setup

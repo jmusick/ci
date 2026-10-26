@@ -52,7 +52,9 @@ Both jobs apply the same npm version floor as the baseline before installing, wi
 Setting `a11y-command` adds an accessibility job. It installs Chromium through the repo's `playwright` or
 `playwright-core`, builds, runs `a11y-setup-command`, starts `a11y-server-command` in the background, waits
 for `a11y-ready-url` (or `a11y-url`) to answer, then runs `a11y-command` with `A11Y_BASE_URL` set to
-`a11y-url`. Leave `a11y-server-command` empty if the audit starts its own server.
+`a11y-url`. Leave `a11y-server-command` empty if the audit starts its own server. The job skips push
+events, since the pull request already audited what the push merges; pull requests, manual runs and
+schedules still run it.
 
 `node-version` and `node-version-file` work as in the baseline.
 
