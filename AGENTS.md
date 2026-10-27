@@ -11,7 +11,7 @@ Reusable GitHub Actions workflows that jmusick's repos call from a short `ci.yml
 | File | Called by | Purpose |
 |---|---|---|
 | `.github/workflows/baseline.yml` | every repo | Gitleaks history scan, npm version floor, lockfile integrity, `npm ci`, `npm audit`, signature check, dependency review |
-| `.github/workflows/web-app.yml` | Astro/Vite Cloudflare apps | Setup, lint, type check, test, build, after-build checks, optional accessibility audit |
+| `.github/workflows/web-app.yml` | Astro/Vite Cloudflare apps | Setup, lint, type check, test, build, after-build checks |
 | `.github/workflows/release.yml` | repos that publish releases | GitHub Release for a pushed `vX.Y.Z` tag through the `gh` CLI |
 | `.github/workflows/self-check.yml` | this repo | actionlint, the script tests, and the baseline run on this repo |
 | `.github/workflows/publish.yml` | this repo | Publishes this repo's own releases through `release.yml` |

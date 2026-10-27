@@ -36,13 +36,6 @@ jobs:
       test-command: npm test
       build-command: npm run build
       after-build-command: npm run check:dist
-      # Example accessibility audit against a local server. Adjust to the repo, or delete to skip it.
-      a11y-command: npm run test:a11y
-      a11y-setup-command: |
-        printf 'AUTH_SECRET=%s\n' "$(openssl rand -hex 32)" > .dev.vars
-        npx wrangler d1 migrations apply DB --local
-      a11y-server-command: npx astro dev --host 127.0.0.1 --port 4399
-      a11y-url: http://127.0.0.1:4399
 
   # The one check to require in branch protection. It passes only when every job above passed, so
   # adding a job never means updating the protection rule.

@@ -1,7 +1,6 @@
-# Lint, type check, test, build and post-build checks for the Cloudflare web apps (Astro or Vite), plus
-# an optional accessibility audit against a local server, which skips push events. Both jobs enforce the
-# same npm version floor as the baseline before installing. Each check runs only when its command is set,
-# so a repo turns on exactly the checks it has scripts for.
+# Lint, type check, test, build and post-build checks for the Cloudflare web apps (Astro or Vite).
+# Enforces the same npm version floor as the baseline before installing. Each check runs only when its
+# command is set, so a repo turns on exactly the checks it has scripts for.
 #
 # Call it from a repo's own workflow:
 #
@@ -53,26 +52,6 @@ on:
         default: ''
       npm-min-version:
         description: Oldest npm allowed. Empty means 11.19.0 when .npmrc sets min-release-age or strict-allow-scripts, and no minimum otherwise.
-        type: string
-        default: ''
-      a11y-command:
-        description: Accessibility audit command. Empty skips the whole accessibility job.
-        type: string
-        default: ''
-      a11y-setup-command:
-        description: Runs after the build and before the server starts, for example writing .dev.vars and a local database.
-        type: string
-        default: ''
-      a11y-server-command:
-        description: Starts the local server in the background. Empty means a11y-command starts its own.
-        type: string
-        default: ''
-      a11y-url:
-        description: Base URL of the local server, passed to a11y-command as A11Y_BASE_URL.
-        type: string
-        default: http://127.0.0.1:4399
-      a11y-ready-url:
-        description: URL polled until the server answers. Defaults to a11y-url.
         type: string
         default: ''
 
@@ -159,110 +138,3 @@ jobs:
       - name: Check the build
         if: inputs.after-build-command != ''
         run: ${{ inputs.after-build-command }}
-
-  a11y:
-    name: Accessibility audit
-    # Pull requests already audit what a push to the default branch merges, so pushes skip it.
-    if: inputs.a11y-command != '' && github.event_name != 'push'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    env:
-      A11Y_BASE_URL: ${{ inputs.a11y-url }}
-    steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: ${{ inputs.node-version-file == '' && inputs.node-version || '' }}
-          node-version-file: ${{ inputs.node-version-file }}
-          cache: npm
-
-      - name: Check out the shared scripts
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ job.workflow_repository }}
-          ref: ${{ job.workflow_sha }}
-          path: .shared-ci
-          sparse-checkout: scripts
-          persist-credentials: false
-
-      - name: Move the shared scripts out of the workspace
-        env:
-          SHARED_REPO: ${{ job.workflow_repository }}
-          SHARED_SHA: ${{ job.workflow_sha }}
-        run: |
-          # Empty values would have checked out the calling repo instead, so stop rather than run its files.
-          if [ -z "$SHARED_REPO" ] || [ -z "$SHARED_SHA" ]; then
-            echo "::error::job.workflow_repository or job.workflow_sha is empty, so the shared scripts can't be located."
-            exit 1
-          fi
-          echo "Shared scripts from $SHARED_REPO@$SHARED_SHA"
-          mv .shared-ci/scripts "$RUNNER_TEMP/shared-ci"
-          rm -rf .shared-ci
-
-      - name: npm version floor
-        env:
-          NPM_MIN_VERSION: ${{ inputs.npm-min-version }}
-        run: node "$RUNNER_TEMP/shared-ci/check-npm-version.mjs" --min "$NPM_MIN_VERSION"
-
-      - name: Install from the lockfile
-        run: npm ci
-
-      # The runner image already has the libraries Chromium needs, so only the browser is downloaded.
-      # --with-deps would also apt-install extra fonts, which took up to 10 minutes on a slow mirror.
-      # System packages are installed only when a browser binary is missing a library.
-      - name: Install Chromium
-        run: |
-          if [ -x node_modules/.bin/playwright ]; then
-            playwright=(npx --no-install playwright)
-          elif [ -x node_modules/.bin/playwright-core ]; then
-            playwright=(npx --no-install playwright-core)
-          else
-            echo "::error::The accessibility audit needs playwright or playwright-core in devDependencies."
-            exit 1
-          fi
-          "${playwright[@]}" install chromium
-          missing=$(find "$HOME/.cache/ms-playwright" -type f \( -name chrome -o -name chrome-headless-shell \) \
-            -exec ldd {} + | grep 'not found' || true)
-          if [ -n "$missing" ]; then
-            echo "Chromium is missing system libraries, so installing them:"
-            echo "$missing"
-            "${playwright[@]}" install-deps chromium
-          fi
-
-      - name: Setup
-        if: inputs.setup-command != ''
-        run: ${{ inputs.setup-command }}
-
-      - name: Build
-        if: inputs.build-command != ''
-        run: ${{ inputs.build-command }}
-
-      - name: Prepare the local server
-        if: inputs.a11y-setup-command != ''
-        run: ${{ inputs.a11y-setup-command }}
-
-      - name: Start the local server
-        if: inputs.a11y-server-command != ''
-        env:
-          SERVER_COMMAND: ${{ inputs.a11y-server-command }}
-          READY_URL: ${{ inputs.a11y-ready-url || inputs.a11y-url }}
-        run: |
-          nohup bash -c "$SERVER_COMMAND" > "$RUNNER_TEMP/server.log" 2>&1 &
-          for _ in $(seq 1 60); do
-            if curl -fsS -o /dev/null "$READY_URL"; then exit 0; fi
-            sleep 2
-          done
-          echo "::error::The server did not answer $READY_URL within 120 seconds."
-          exit 1
-
-      - name: Accessibility audit
-        run: ${{ inputs.a11y-command }}
-
-      - name: Server log
-        if: failure() && inputs.a11y-server-command != ''
-        run: cat "$RUNNER_TEMP/server.log" || true

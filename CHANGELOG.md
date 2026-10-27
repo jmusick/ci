@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.3.0] - 2026-10-26
+
+### Removed
+
+- Removed the accessibility audit job from `web-app.yml`, including its Chromium install, duplicate
+  build and local server setup, to reduce CI time.
+- Removed the `a11y-command`, `a11y-setup-command`, `a11y-server-command`, `a11y-url` and
+  `a11y-ready-url` inputs and the accessibility example from the web app CI template. This is a
+  breaking change: callers must remove all `a11y-*` inputs from their workflow when bumping their
+  pin to v0.3.0. Existing pins keep the old behavior.
+
 ## [0.2.3] - 2026-10-26
 
 ### Fixed
