@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `templates/dependabot.yml` now checks monthly instead of weekly on Mondays, and new jmusick/ci
+  releases skip the github-actions cooldown so callers see them right away.
+
 ## [0.3.0] - 2026-10-26
 
 ### Removed

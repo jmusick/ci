@@ -37,7 +37,7 @@ comment. So:
 - Top-level `permissions: contents: read`. A job that needs more asks for it on the job.
 - Every `actions/checkout` sets `persist-credentials: false`.
 - Third-party actions are pinned by full commit SHA with a `# vX.Y.Z` comment. Dependabot updates them
-  with a 14-day cooldown.
+  with a 7-day cooldown.
 - Downloaded tools (Gitleaks, actionlint) are pinned by version and SHA-256 in the workflow's `env`, and
   updated by hand to a release at least two weeks old. The comment above each pin says how.
 - Event data and inputs reach shell scripts through `env:`, never `${{ }}` inside `run:`. The one
