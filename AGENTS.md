@@ -18,8 +18,7 @@ Reusable GitHub Actions workflows that jmusick's repos call from a short `ci.yml
 | `scripts/*.mjs` | baseline, web-app | The npm version floor and lockfile integrity checks, dependency-free Node |
 | `templates/` | copied by hand | Starting points for a repo's `ci.yml`, `release.yml` and `dependabot.yml` |
 
-Current callers: orboro-net and firelands-current use `baseline.yml` and `web-app.yml`. tagstash still
-has its own inline CI.
+Current callers: orboro-net, firelands-current and tagstash use `baseline.yml` and `web-app.yml`.
 
 ## Changes reach callers only through a pin bump
 
